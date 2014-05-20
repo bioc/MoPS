@@ -1,0 +1,340 @@
+% 
+\documentclass[a4paper]{article}
+\usepackage{Sweave}
+\usepackage{cite}
+\usepackage{Bioconductor}
+\usepackage[latin1]{inputenc} 
+\usepackage[section]{placeins}
+
+%\VignetteIndexEntry{Model-based Periodicity Screening}
+
+\title{MoPS - Model-based Periodicity Screening}
+\author{Philipp Eser, Achim Tresch}
+
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents{}
+
+
+\section{Overview}
+
+The detection and characterization of periodic changes of measurements in time
+is important in many fields of science.
+This package employs a model-based screening algorithm for the
+identification of periodic fluctuations in time series datasets. It uses a
+likelihood ratio statistic to decide whether a time series displays periodic fluctuations
+or not. Additionally MoPS infers the best fitting periodic time course for each
+time series and thus allows the characterization of various parameters like
+period length and phase.
+The algorithm was originally designed to identify and characterize periodic
+expression profiles in Microarray time series measurements. 
+Hence, the described case study (section 6) is based on a time series of
+genome-wide expression measurements during the S.cerevisiae cell cycle
+\cite{Eser2014}.
+
+\section{Installation}
+
+To run the MoPS package, the software R (> 3.0.0) has to be installed. For
+installation of R, refer to \url{http://www.r-project.org}.
+To see how to install add-on R-packages, start R and type in
+\Rcode{help(INSTALL)}.  To install the MoPS package, use the function
+\Rcode{biocLite}. Once the package is installed, you can load it by
+
+<<echo=T>>=
+library(MoPS)
+@
+
+\section{MoPS Quickstart}
+
+The application of MoPS essentially requires only two commands,
+\Rcode{fit.periodic} and \Rcode{predictTimecourses}:
+Given a (noisy, possibly periodic) time series, say
+<<echo=T>>=
+y = 2*sin(seq(0,6*pi,length.out=50))
+y.noise = y+rnorm(50,sd=1)
+@
+we can estimate a best periodic fit to the time series y.noise by
+<<echo=T>>=
+res = fit.periodic(y.noise)
+@
+the fitted time course can be accessed by
+<<echo=T>>=
+predicted = predictTimecourses(res)
+@
+We visualize the results in a plot:
+<<echo=T,fig=T,include=F>>=
+plot(y.noise,type="l",col="red")
+points(y,type="l")
+points(predicted,type="l",lwd=2.5,col="limegreen")
+@
+\begin{center}
+\includegraphics[width=4in]{MoPS-005}
+\end{center}
+
+\section{Basic Usage}
+This section illustrates the basic usage of MoPS to fit periodic time courses to
+time series data. We demonstrate the use of MoPS at the example of 10 time
+series consisting of 41 consecutive measurements each (see
+\Rcode{help(fit.periodic)} for more information on how these data were
+obtained).
+<<echo=T>>=
+data(basic)
+dim(basic)
+@
+For illustration, let us plot time course 1 and 10.
+<<echo=T,fig=T,include=F>>=
+par(mfrow=c(2,1))
+plot(basic[1,],type="l",main="time course No. 1",xlab="",ylab="[arb. units]")
+plot(basic[10,],type="l",main="time course No. 2",xlab="",ylab="[arb. units]")
+@
+\begin{center}
+\includegraphics[width=5in]{MoPS-007}
+\end{center}
+
+The function \Rcode{fit.periodic} performs the fitting of periodic functions
+to each time series in the data matrix. The results can be converted to a data.frame
+that yields the best fitting periodic parameters for each time series. 
+<<echo=T>>=
+res = fit.periodic(basic)
+result.as.dataframe(res)
+@
+For each time series (black line), using the fitted parameters, we can now
+calculate and plot the predicted time course (green).
+By default, \Rcode{predictTimecourses} returns a matrix of the same dimension as
+the input matrix basic that was used for learning the parameters.
+<<echo=T,fig=T,include=F>>=
+fitted.mat = predictTimecourses(res)
+dim(fitted.mat)
+par(mfrow=c(2,1))
+plot(basic[1,],type="l",main="time course No. 1",xlab="",ylab="[arb. units]")
+points(fitted.mat[1,],type="l",col="limegreen",lwd=2)
+plot(basic[10,],type="l",main="time course No. 2",xlab="",ylab="[arb. units]")
+points(fitted.mat[10,],type="l",col="limegreen",lwd=2)
+@
+\begin{center}
+\includegraphics[width=5in]{MoPS-009}
+\end{center}
+
+\section{Specification}
+
+\subsection{Formal description}
+
+MoPS determines an optimal periodic fit to a given time series. 
+It provides the parameters of the optimal fit, plus a periodicity score
+that can be used to rank several time courses according to their periodicity.
+The central idea is to compare the best least squares fit among an exhaustive
+set of periodic test functions with the best fit of a corresponding set of non-periodic test functions.
+The log likelihood ratio of these two fits is our periodicity score (see Figure
+1).
+\begin{figure}
+\centering
+\includegraphics[width=13cm,height=5.5cm]{mops1.pdf}
+\caption{Scoring of time series according to periodicity. Each input time course
+is fitted to an exhaustive set of periodic (left) and non-periodic (right) test
+functions. The log likelihood ratio of the best fitting test functions is the
+periodicity score (taken from \cite{Eser2014}).}
+\end{figure}
+
+MoPS uses periodic curves that are parametrized by a 6-tuple (lambda, sigma,
+phi, psi, mean, amplitude) of parameters.
+The period length lambda defines the time duration between two consecutive
+maxima. The parameter phi determines the phase,
+e.g. the time point at which the time course assumes its maximal values.
+The parameter sigma determines the magnitude of attenuation of the signal
+along the complete time course. This can arise if there is increasing synchrony
+loss with time, leading to a blurred profile with decreasing amplitude.  
+Finally, the parameter psi allows the generation of more flexible periodic test
+functions by deforming the sine wave curves at variable sampling points (see
+Figure 2).
+
+\begin{figure}
+\centering
+\includegraphics[width=10cm,height=10cm]{mops2.pdf}
+\caption{Fitting of a characteristic periodic profile to time course
+measurements. See text for a description of the parameters (taken from
+\cite{Eser2014}).}
+\end{figure}
+
+Note that we use an equidistant grid of phases which is independent of the
+period length (lambda). This makes sure that for each lambda the same phase increment is used
+and thus does not favor test functions with small lambda.
+
+\FloatBarrier
+
+
+\subsection{Implementation}
+
+The main function of the MoPS package is \Rcode{fit.periodic}, a method that
+determines an optimal fit of a periodic curve to a given time course.
+The function takes as input a matrix containing time series measurements and
+optionally a set of parameters that are used to model the underlying
+periodicity.
+
+\Rcode{fit.periodic} automatically creates periodic test functions based on all
+possible combinations of the input parameters. It further creates non-periodic test functions
+that represent a diverse set of constant time courses. It then compares each input time course
+to all periodic and non-periodic test functions with linear regression based on
+the \Rcode{lm} function to estimate the likelihood of periodic behaviour.
+Instead of using plain least squares regression, the user can specify a vector of regression weights for each measurement.
+This is particularly useful when the magnitude of the measurement error is not constant for all measurements, as, e.g., for gene expression measurements.
+
+The screening result is returned as a list object (for a detailed description,
+see \Rcode{help(fit.periodic)}).
+The first slot contains the screening result for each time series (here only
+the first is shown):
+<<echo=T>>=
+res$fitted[[1]] 
+@
+The remaining slots contain information about the screened parameter ranges:
+<<echo=T>>=
+res[2:6]
+@
+
+This result list serves as input to the function \Rcode{predictTimecourses}
+and thus contains several parameters that need not necessarily be accessed by
+the user. The function \Rcode{result.as.dataframe} can convert the result
+object to a data.frame which includes only the time series specific best fitting periodic
+parameters:
+<<echo=T>>=
+head(result.as.dataframe(res))
+@
+The function \Rcode{predictTimecourses} constructs the best fitting periodic
+time course for each entry. By default, the resulting matrix of predicted time
+courses has the same dimensions as the original input matrix. However, the number of columns
+changes, if the user chooses a phase grid that has more resolution (less
+spacing) than the measurements points.
+
+
+
+\section{Case Study - Yeast Cell Cycle}
+
+The following section illustrates the workflow for the identification and characterization of cell
+cycle regulated genes in expression time series data. 
+We start by loading a data matrix that contains normalized mRNA expression time
+series of 200 genes (rows) (subset of data published in \cite{Eser2014},
+ArrayExpress E-MTAB-1908).
+The values in each column correspond to the measurements taken at different time points after release from cell cycle arrest. It entails
+41 samples that are separated by 5 minutes, covering a total of 205 minutes.
+<<echo=T>>=
+data(ccycle)
+timepoints = seq(5,205,5)
+@
+
+
+\subsection{Detection of periodically expressed genes}
+The first step in the MoPS screening procedure is the construction of the
+exhaustive set of periodic test functions.
+This is done by specifying a cartesian grid of parameters that define the test functions.
+I.e., for each parameter, we specify a set of values that will be combined with all other parameter choices.
+We aim to identify genes that are expressed in a cell cycle regulated manner and
+thus show periodic expression profiles.
+We will use the input parameters phi, lambda and sigma to model this periodic
+expression.
+Accordingly, lambda corresponds to the cell cycle length, phi is the time at
+which maximal expression is achieved and sigma corresponds to the magnitude of synchrony loss.
+\newline While phi and lambda are basic parameters of periodic functions, sigma
+is harder to conceive: it determines the magnitude of attenuation along
+the complete time course.
+Here, this arises from cell cycle length differences of individual cells in the
+population which in turn leads to increasing loss of synchrony after release from cell cycle
+arrest.  
+\newline
+By choosing meaningful parameter ranges for lambda, phi and sigma we screen our
+data for cell cycle regulated genes:
+<<echo=T>>=
+phi = seq(5,80,5)
+lambda = seq(40,80,5)
+sigma = seq(4,8,1)
+res = fit.periodic(ccycle,timepoints=timepoints,phi=phi,lambda=lambda,sigma=sigma)
+res.df = result.as.dataframe(res)
+head(res.df)
+@
+\Rcode{fit.periodic} returns the best-fitting periodic parameter set and
+periodicity score for each gene.
+Genes with a positive score achieve better fits with periodic
+than non-periodic test functions. However, this does not imply statistical significance, it merely provides a ranking of genes.
+The fitting results are used to predict the periodic time courses for all genes: 
+<<echo=T>>=
+time.courses = predictTimecourses(res)
+dim(time.courses)
+@
+This results in a numeric matrix containing the fitted
+characteristic time courses, which can be plotted for individual genes. 
+<<echo=T,fig=T,include=F>>=
+id = "YPL133C"
+t = time.courses[id,]
+
+plot(timepoints,t,type="l",col="limegreen",lwd=2.5,main=id,
+		xlab="time [min]",ylab="expression",ylim=c(220,580))
+points(timepoints,ccycle[id,],type="l",col="black")
+@
+\begin{center}
+\includegraphics[width=4in]{MoPS-016}
+\end{center}
+
+Using the gene-specific best fitting parameters of genes with score > 0, we
+can derive the median cell cycle length and variation in the population. 
+<<echo=T>>=
+lambda.global = median(res.df$lambda[res.df$score > 0])
+lambda.global
+sigma.global = median(res.df$sigma[res.df$score > 0])
+sigma.global
+@
+
+\subsection{Characterisation of cell cycle regulated genes}
+
+The following analyses aim to characterize the periodic time courses of
+cell cycle regulated genes.
+MoPS provides an optional parameter psi that defines the flexibility to shape the periodic test functions.
+Using this parameter, the number of created test functions increases greatly and
+leads to better fits. The larger the number of psi, the more flexible but also more time
+consuming the calculations.
+
+In this case study, the estimated cell cycle length (lambda.global) and
+its variation in the cell population (sigma.global) is a common characteristic
+and should be the same for all genes.
+Thus we want to fix these global parameters and fit the gene-specific phase
+and shape (psi) of the gene expression time courses. 
+\newline
+First we limit the data matrix to genes that are putatively cell cycle regulated
+(score > 0) which we can derive from the result of the first screening.
+<<echo=T>>=
+periodic.ids = res.df$ID[res.df$score > 0]
+ccycle = ccycle[periodic.ids,]
+@
+To achieve better resolution, it makes sense to decrease the spacing between
+phases in this screening. 
+<<echo=T>>=
+phi = seq(5,80,2.5)
+res.shape = fit.periodic(ccycle,timepoints=timepoints,
+	phi=phi,
+	lambda=lambda.global,
+	sigma=sigma.global,
+	psi=2)
+time.courses.shape = predictTimecourses(res.shape)
+@
+Note that we set the shape-parameter psi to 2 in order to speed up the fitting.
+The user can set this parameter to higher values to allow a more flexible
+fitting.
+We again plot the expression time course of our example gene (YPL133C) together
+with the fitted time course and extract the phase of its maximal epxression.
+<<echo=T,fig=T,include=F>>=
+t = time.courses.shape[id,]
+predicted.phase = phi[which(t == max(t))]
+plot(timepoints,ccycle[id,],type="l",lwd=2,ylim=c(220,580),
+		xlab="time [min]",ylab="expression",
+		main=paste(id,"| peak at",predicted.phase,"min"))
+new.timepoints = seq(5,205,2.5)  
+points(new.timepoints,t,type="l",col="limegreen",lwd=3)
+abline(v=predicted.phase,col="limegreen",lwd=3)
+@
+\begin{center}
+\includegraphics[width=4in]{MoPS-020}
+\end{center}
+\bibliography{refs}{}
+\bibliographystyle{plain}
+
+\end{document}
