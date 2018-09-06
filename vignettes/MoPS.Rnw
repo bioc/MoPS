@@ -41,7 +41,7 @@ To run the MoPS package, the software R (> 3.0.0) has to be installed. For
 installation of R, refer to \url{http://www.r-project.org}.
 To see how to install add-on R-packages, start R and type in
 \Rcode{help(INSTALL)}.  To install the MoPS package, use the function
-\Rcode{biocLite}. Once the package is installed, you can load it by
+\Rcode{BiocManager::install}. Once the package is installed, you can load it by
 
 <<echo=T>>=
 library(MoPS)
